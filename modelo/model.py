@@ -1,5 +1,6 @@
 from prophet import Prophet
 import pandas as pd
+import joblib
 
 class ProphetPipeline:
     def __init__(self, yearly_seasonality=True, weekly_seasonality=True, daily_seasonality=False):
@@ -61,6 +62,3 @@ class ProphetPipeline:
             future['holiday'] = future['ds'].isin(self.holidays_df['ds']).astype(int)
         forecast = self.model.predict(future)
         return forecast
-
-import joblib 
-joblib.dump(Prophet, 'Model_Prophet')

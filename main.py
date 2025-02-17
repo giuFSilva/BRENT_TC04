@@ -5,16 +5,18 @@ from plots.plot_generation import plot_real_vs_forecast, plot_forecast_with_hist
 
 import pandas as pd
 from datetime import datetime
+import joblib
 
 # Carregar e processar os dados
 file_path = "C:\\Users\\giuliasilva\\Desktop\\Estudo\\POS\\TC - Modulo 04\\Projeto_Teste\\data\\Base_IPEA.csv"
+
 data_pipeline = DataPipeline(file_path=file_path)
 df = data_pipeline.load_data()
 df = data_pipeline.preprocess()
 
 # Dividir os dados para treino e teste
-train_end_date = '2020-12-31'
-test_start_date = '2021-01-01'
+train_end_date = '2023-12-31'  # Modificar para 2023
+test_start_date = '2024-01-01'  # Dados para testar em 2024
 
 # Instanciar o modelo Prophet
 prophet_pipeline = ProphetPipeline()
@@ -43,7 +45,10 @@ train_data['holiday'] = train_data['ds'].apply(
 # Treinar o modelo
 prophet_pipeline.fit_model()
 
-# Garantir que o período do forecast seja do mesmo tamanho da base de teste
+# Salvar o modelo treinado
+joblib.dump(prophet_pipeline.model, 'Model_Prophet.joblib')
+
+# Garantir que o período do forecast seja do mesmo tamanho da base de teste (2024)
 forecast = prophet_pipeline.predict(periods=len(test_data), freq='D')
 
 # Exibir os tamanhos para validação
@@ -77,7 +82,7 @@ end_date = datetime(2027, 12, 31)
 last_date = forecast['ds'].max()
 days_until_2027 = (end_date - last_date).days
 
-# Gerando o DataFrame de previsões para o período desejado
+# Gerando o DataFrame de previsões para o período desejado (2025 até 2027)
 future_2025 = prophet_pipeline.model.make_future_dataframe(periods=days_until_2027, freq='D')
 
 # Adicionando os feriados ao DataFrame de previsões
