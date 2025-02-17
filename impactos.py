@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 
 def impactos():
-    st.markdown("### **Impactos sobre o Produto Final**")
+    st.markdown("## **Impactos sobre o consumidor Final**")
     
     # Descrição breve sobre o Petróleo Brent
     st.write(
@@ -12,7 +12,7 @@ def impactos():
     
     # Descrever o impacto de eventos recentes no preço do petróleo
     st.write(
-        "Ao longo dos últimos anos, diversos eventos globais, como a pandemia de COVID-19, a guerra na Ucrânia e as sanções ao Irã, têm causado variações no preço do petróleo, refletindo diretamente no aumento ou redução dos custos dos combustíveis e afetando os consumidores."
+        "Ao longo dos últimos anos, diversos eventos globais têm causado variações no preço do petróleo, refletindo diretamente no aumento ou redução dos custos dos combustíveis e afetando os consumidores."
     )
 
     # Seção 1: Aumento nos preços dos combustíveis

@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import joblib
 import plotly.graph_objs as go
 from prophet import Prophet
 from utils.helpers import ModelEvaluation  # Importando a classe ou função
@@ -70,26 +69,27 @@ def previsao():
     # Exibir as métricas
     col1, col2, col3 = st.columns(3)
     col1.metric("📊 MAE", f"{resultados['MAE']:.2f}")
-    col2.metric("📈 MAPE", f"{resultados['MAPE']:.2f}%")
     col3.metric("📉 RMSE", f"{resultados['RMSE']:.2f}")
+    col2.metric("📈 MAPE", f"{resultados['MAPE']:.2f}%")
+   
 
     # Exibir as previsões para 2024 vs valores reais
     trace1 = go.Scatter(
-        x=df_2024['ds'],
-        y=df_2024['y'],
-        mode='lines+markers',
-        name='Real',
-        line=dict(color='#1E90FF'),
+    x=df_2024['ds'],
+    y=df_2024['y'],
+    mode='lines',
+    name='Real',
+    line=dict(color='#4b57ca', width=2),  # Ajuste a espessura da linha aqui
     )
-    
+
     trace2 = go.Scatter(
-        x=previsao_2024['ds'],
-        y=previsao_2024['yhat'],
-        mode='lines+markers',
-        name='Previsão',
-        line=dict(color='#FF6347'),
+    x=previsao_2024['ds'],
+    y=previsao_2024['yhat'],
+    mode='lines',
+    name='Previsão',
+    line=dict(color='#bf2f1b', width=2),  # Ajuste a espessura da linha aqui
     )
-    
+
     layout = go.Layout(
         title='Previsão x Real de Preço do Petróleo Brent (2024)',
         xaxis=dict(title='Data'),
@@ -118,7 +118,8 @@ def previsao():
         y=previsao_ano['yhat'],
         mode='lines',
         name=f'Previsão {ano_selecionado}',
-        line=dict(color='#32CD32'),
+        line=dict(color='#64971a', width=1),  # Ajuste a espessura da linha aqui
+
     )
 
     layout_ano = go.Layout(

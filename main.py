@@ -1,98 +1,139 @@
+import pandas as pd
+import joblib
+from datetime import datetime
 from utils.utils import DataPipeline
 from modelo.model import ProphetPipeline
 from utils.helpers import ModelEvaluation
 from plots.plot_generation import plot_real_vs_forecast, plot_forecast_with_history, plot_forecast
 
-import pandas as pd
-from datetime import datetime
-import joblib
+# ==============================
+# 🔹 Função para carregar e processar os dados
+# ==============================
+def carregar_dados(file_path):
+    try:
+        data_pipeline = DataPipeline(file_path=file_path)
+        df = data_pipeline.load_data()
+        return data_pipeline.preprocess()
+    except Exception as e:
+        print(f"Erro ao carregar os dados: {e}")
+        return None
 
-# Carregar e processar os dados
-file_path = "C:\\Users\\giuliasilva\\Desktop\\Estudo\\POS\\TC - Modulo 04\\Projeto_Teste\\data\\Base_IPEA.csv"
+# ==============================
+# 🔹 Função para configurar e treinar o modelo Prophet
+# ==============================
+def treinar_modelo(df, train_end_date, test_start_date):
+    try:
+        prophet_pipeline = ProphetPipeline()
 
-data_pipeline = DataPipeline(file_path=file_path)
-df = data_pipeline.load_data()
-df = data_pipeline.preprocess()
+        # Dividir os dados
+        train_data, test_data = prophet_pipeline.split_data(df, train_end_date, test_start_date)
 
-# Dividir os dados para treino e teste
-train_end_date = '2023-12-31'  # Modificar para 2023
-test_start_date = '2024-01-01'  # Dados para testar em 2024
+        # Adicionar eventos históricos
+        eventos = [
+            ("Pandemia COVID-19", ['2020-03-11', '2020-04-01'], -7, 30),
+            ("Guerra Rússia-Ucrânia", ['2022-02-24'], 0, 10),
+            ("Crise Financeira Global 2008", ['2008-09-15'], -10, 10),
+            ("Queda de Preços do Petróleo", ['2014-06-01', '2015-01-01', '2016-01-01'], -30, 30),
+            ("Ataque às instalações da Arábia Saudita", ['2019-09-14'], -1, 2),
+        ]
+        for nome, datas, impacto_neg, impacto_pos in eventos:
+            prophet_pipeline.add_event(nome, datas, impacto_neg, impacto_pos)
 
-# Instanciar o modelo Prophet
-prophet_pipeline = ProphetPipeline()
+        # Criar DataFrame de feriados e configurar o modelo
+        holidays_df = prophet_pipeline.create_holidays_df()
+        prophet_pipeline.configure_model()
 
-# Dividir os dados
-train_data, test_data = prophet_pipeline.split_data(df, train_end_date, test_start_date)
+        # Adicionar feriados ao conjunto de treino
+        train_data = train_data.merge(holidays_df[['ds', 'holiday']], on='ds', how='left').fillna(0)
 
-# Adicionar eventos históricos (antes de treinar o modelo)
-prophet_pipeline.add_event('Pandemia COVID-19', ['2020-03-11', '2020-04-01'], -7, 30)
-prophet_pipeline.add_event('Guerra Rússia-Ucrânia', ['2022-02-24'], 0, 10)
-prophet_pipeline.add_event('Crise Financeira Global 2008', ['2008-09-15'], -10, 10)
-prophet_pipeline.add_event('Queda de Preços do Petróleo', ['2014-06-01', '2015-01-01', '2016-01-01'], -30, 30)
-prophet_pipeline.add_event('Ataque às instalações da Arábia Saudita', ['2019-09-14'], -1, 2)
+        # Treinar o modelo
+        prophet_pipeline.fit_model()
+        joblib.dump(prophet_pipeline.model, 'Model_Prophet.joblib')
 
-# Criar o DataFrame de feriados e eventos
-holidays_df = prophet_pipeline.create_holidays_df()
+        return prophet_pipeline, train_data, test_data, holidays_df
+    except Exception as e:
+        print(f"Erro ao treinar o modelo: {e}")
+        return None, None, None, None
 
-# Configuração do modelo
-prophet_pipeline.configure_model()
+# ==============================
+# 🔹 Função para prever e avaliar o modelo
+# ==============================
+def prever_e_avaliar(prophet_pipeline, test_data, holidays_df):
+    try:
+        # Gerar previsões
+        forecast = prophet_pipeline.predict(periods=len(test_data), freq='D')
 
-# Adicionar a coluna 'holiday' à base de treino antes de treinar o modelo
-train_data['holiday'] = train_data['ds'].apply(
-    lambda x: 1 if x in holidays_df['ds'].values else 0
-)
+        # Comparação entre dados reais e previsão
+        comparison = test_data.merge(forecast[['ds', 'yhat']], on='ds', how='inner')
+        comparison.rename(columns={'y': 'Real', 'yhat': 'Previsto'}, inplace=True)
 
-# Treinar o modelo
-prophet_pipeline.fit_model()
+        # Avaliar modelo
+        evaluation = ModelEvaluation(test_data, forecast)
+        results = evaluation.evaluate()
 
-# Salvar o modelo treinado
-joblib.dump(prophet_pipeline.model, 'Model_Prophet.joblib')
+        return forecast, comparison, results
+    except Exception as e:
+        print(f"Erro na previsão e avaliação: {e}")
+        return None, None, None
 
-# Garantir que o período do forecast seja do mesmo tamanho da base de teste (2024)
-forecast = prophet_pipeline.predict(periods=len(test_data), freq='D')
+# ==============================
+# 🔹 Função para prever o futuro (até 2027)
+# ==============================
+def prever_futuro(prophet_pipeline, holidays_df, forecast):
+    try:
+        end_date = datetime(2027, 12, 31)
+        last_date = forecast['ds'].max()
+        days_until_2027 = (end_date - last_date).days
 
-# Exibir os tamanhos para validação
-print(f"Tamanho do treino: {len(train_data)}")
-print(f"Tamanho do teste: {len(test_data)}")
-print(f"Tamanho da previsão: {len(forecast)}")
+        # Criar DataFrame de previsões futuras
+        future_dates = prophet_pipeline.model.make_future_dataframe(periods=days_until_2027, freq='D')
+        future_dates = future_dates.merge(holidays_df[['ds', 'holiday']], on='ds', how='left').fillna(0)
 
-# Exibir as previsões
-print(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
+        # Gerar previsões para 2025-2027
+        forecast_2025 = prophet_pipeline.model.predict(future_dates)
 
-# Exemplo de chamada para o plot das previsões
-plot_forecast(forecast, title='Previsões Ibovespa para o Brent')
+        return forecast_2025
+    except Exception as e:
+        print(f"Erro ao prever o futuro: {e}")
+        return None
 
-# Criação e avaliação do modelo
-evaluation = ModelEvaluation(test_data, forecast)
-results = evaluation.evaluate()  # Isso gera as métricas e imprime
+# ==============================
+# 🔹 Execução do Script
+# ==============================
+if __name__ == "__main__":
+    file_path = "C:\\Users\\giuliasilva\\Desktop\\Estudo\\POS\\TC - Modulo 04\\Projeto_Teste\\data\\Base_IPEA.csv"
 
-# Mesclar previsões com dados reais
-comparison = pd.merge(test_data, forecast[['ds', 'yhat']], on='ds', how='inner')
+    # Carregar os dados
+    df = carregar_dados(file_path)
+    if df is None:
+        exit()
 
-# Renomear as colunas para facilitar a interpretação
-comparison.rename(columns={'y': 'Real', 'yhat': 'Previsto'}, inplace=True)
+    # Treinar modelo
+    prophet_pipeline, train_data, test_data, holidays_df = treinar_modelo(df, '2023-12-31', '2024-01-01')
+    if prophet_pipeline is None:
+        exit()
 
-# Chamar função para plotar comparação
-plot_real_vs_forecast(comparison)
+    # Gerar previsões e avaliar modelo
+    forecast, comparison, results = prever_e_avaliar(prophet_pipeline, test_data, holidays_df)
+    if forecast is None:
+        exit()
 
-# Definindo a data final para previsões até 2027
-end_date = datetime(2027, 12, 31)
+    # Gerar previsões futuras (2025-2027)
+    forecast_2025 = prever_futuro(prophet_pipeline, holidays_df, forecast)
+    if forecast_2025 is None:
+        exit()
 
-# Calculando o número de dias entre a última data dos dados atuais e o final de 2027
-last_date = forecast['ds'].max()
-days_until_2027 = (end_date - last_date).days
+    # ==============================
+    # 🔹 Exibir resultados
+    # ==============================
+    print(f"Tamanho do treino: {len(train_data)}")
+    print(f"Tamanho do teste: {len(test_data)}")
+    print(f"Tamanho da previsão: {len(forecast)}")
+    print(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail())
 
-# Gerando o DataFrame de previsões para o período desejado (2025 até 2027)
-future_2025 = prophet_pipeline.model.make_future_dataframe(periods=days_until_2027, freq='D')
-
-# Adicionando os feriados ao DataFrame de previsões
-future_2025 = pd.merge(future_2025, holidays_df[['ds', 'holiday']], on='ds', how='left')
-
-# Garantir que a coluna 'holiday' esteja presente nas previsões (0 ou 1)
-future_2025['holiday'] = future_2025['ds'].apply(lambda x: 1 if x in holidays_df['ds'].values else 0)
-
-# Gerar as previsões para o período de 2025 até 2027
-forecast_2025 = prophet_pipeline.model.predict(future_2025)
-
-# Gráfico com dados históricos e previsões
-plot_forecast_with_history(train_data, forecast_2025, title='Previsões e Dados Históricos (2025 em diante)')
+    # ==============================
+    # 🔹 Gerar gráficos
+    # ==============================
+    plot_forecast(forecast, title='Previsões Ibovespa para o Brent')
+    plot_real_vs_forecast(comparison)
+    plot_forecast_with_history(train_data, forecast_2025, title='Previsões e Dados Históricos (2025 em diante)')
